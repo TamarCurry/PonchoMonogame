@@ -24,26 +24,34 @@ namespace PonchoMonogame
 		private int _frames;
 		private int _fpsInterval;
 		private bool _started;
+
+		private Action _onInit;
 		private Sprite _mouseOver;
 		private Sprite _prevMouseOver;
-		private Color[] _pixels;
-		private Rectangle _pixelRect;
+		private Vector2 _empty;
+		private Vector2 _pivot;
+		private Rectangle _sourceRect;
+		private SpriteBatch spriteBatch;
+		private UpdateDelegate _onUpdate;
+		private GraphicsDeviceManager graphics;
 		private Dictionary<string, Texture2D> _textures;
 
-		private UpdateDelegate _onUpdate;
-		private Action _onInit;
-
+		#region GETTERS
 		public int fpsInterval { get { return _fpsInterval; } set { _fpsInterval = value > 0 ? value : 1000; } }
 		public int fps { get; private set; }
 		public int time { get; private set; }
 		public int deltaTimeMs { get; private set; }
 		public float deltaTime { get; private set; }
 		public Stage stage { get; private set; }
+		#endregion
 
-		GraphicsDeviceManager graphics;
-		SpriteBatch spriteBatch;
-		
+		#region METHODS
 		// --------------------------------------------------------------
+
+		/// <summary>
+		/// Constructor.
+		/// </summary>
+		/// <param name="onInit">Callback for when the app is ready.</param>
 		public MonogameApp(Action onInit)
 		{
 			graphics = new GraphicsDeviceManager(this);
@@ -55,11 +63,15 @@ namespace PonchoMonogame
 			_onInit = onInit;
 			_onUpdate = () => { };
 			_textures = new Dictionary<string, Texture2D>();
-			_pixels = new Color[]{ new Color(0, 0, 0, 0) };
-			_pixelRect = new Rectangle(0, 0, 1, 1);
+			_empty = new Vector2();
+			_pivot = new Vector2();
+			_sourceRect = new Rectangle();
 		}
 		
 		// --------------------------------------------------------------
+		/// <summary>
+		/// Runs the app.
+		/// </summary>
 		public void Start()
 		{
 			if(_started) return;
@@ -68,7 +80,11 @@ namespace PonchoMonogame
 		}
 		
 		// --------------------------------------------------------------
-		public void UpdateTime(int gameTime)
+		/// <summary>
+		/// Updates the total time, time since last render, and FPS.
+		/// </summary>
+		/// <param name="gameTime"></param>
+		private void UpdateTime(int gameTime)
 		{
 			int newTime = gameTime;
 			deltaTimeMs = newTime - time;
@@ -86,6 +102,11 @@ namespace PonchoMonogame
 		}
 		
 		// --------------------------------------------------------------
+		/// <summary>
+		/// Subscribes or unsubscribes an UpdateDelegate to be called when the game updates.
+		/// </summary>
+		/// <param name="onUpdate"></param>
+		/// <param name="add"></param>
 		public void Subscribe(UpdateDelegate onUpdate, bool add)
 		{
 			if(onUpdate == null) return;
@@ -94,6 +115,11 @@ namespace PonchoMonogame
 		}
 		
 		// --------------------------------------------------------------
+		/// <summary>
+		/// Returns an image.
+		/// </summary>
+		/// <param name="path">Path of the image to be loaded.</param>
+		/// <returns></returns>
 		public ITextureImage GetImage(string path) { return GetImage(path, null, null, null); }
 		public ITextureImage GetImage(string path, Pivot pivot) { return GetImage(path, null, null, pivot); }
 		public ITextureImage GetImage(string path, string name) { return GetImage(path, name, null, null); }
@@ -112,6 +138,12 @@ namespace PonchoMonogame
 		}
 		
 		// --------------------------------------------------------------
+		/// <summary>
+		/// Returns a texture.
+		/// </summary>
+		/// <param name="path">Path of the texture to be loaded.</param>
+		/// <param name="name">Unique name of the texture.</param>
+		/// <returns></returns>
 		private Texture2D GetTexture(string path, string name)
 		{
 			if(!_textures.ContainsKey(name))
@@ -127,12 +159,22 @@ namespace PonchoMonogame
 		}
 		
 		// --------------------------------------------------------------
+		/// <summary>
+		/// Returns a texture.
+		/// </summary>
+		/// <param name="name">Unique name of the texture.</param>
+		/// <returns></returns>
 		private Texture2D GetTexture(string name)
 		{
 			return _textures.ContainsKey(name) ? _textures[name] : null;
 		}
 		
 		// --------------------------------------------------------------
+		/// <summary>
+		/// Returns a valid path for the texture. Strips the file type from the path, as it is not used by Monogame.
+		/// </summary>
+		/// <param name="path"></param>
+		/// <returns></returns>
 		private string GetPath(string path)
 		{
 			string s = path.ToLower();
@@ -213,17 +255,14 @@ namespace PonchoMonogame
 			_mouseOver = null;
 			GraphicsDevice.Clear(Color.CornflowerBlue);
 			MouseState m = Mouse.GetState();
-
-			// TODO: Add your drawing code here
-			spriteBatch.Begin();
+			
 			int n = stage.numChildren;
-			Transforms t = new Transforms();
+			Matrix matrix = Matrix.Identity;
 			for ( int i = 0; i < n; ++i )
 			{
-				DrawSprite(stage.GetChildAt(i), t, m);
+				DrawSprite(stage.GetChildAt(i), matrix, m);
 			}
-			spriteBatch.End();
-
+			
 			base.Draw(gameTime);
 
 			if(_mouseOver != _prevMouseOver)
@@ -235,73 +274,40 @@ namespace PonchoMonogame
 		}
 		
 		// --------------------------------------------------------------
-		private Rectangle ToRect(ImageRect r)
+		/// <summary>
+		/// Draws a sprite to the screen.
+		/// </summary>
+		/// <param name="sprite">Sprite to be rendered.</param>
+		/// <param name="parentMatrix">Current matrix to use for positioning, rotating, and scaling the sprite.</param>
+		/// <param name="mouseState">MouseState instance</param>
+		private void DrawSprite(Sprite sprite, Matrix parentMatrix, MouseState mouseState)
 		{
-			return new Rectangle(r.x, r.y, (int)r.width, (int)r.height);
-		}
-		
-		// --------------------------------------------------------------
-		private void DrawSprite(Sprite sprite, Transforms t, MouseState m)
-		{
-			Transforms c = t.Concatenate(sprite.transforms);
+			Matrix matrix =  Matrix.CreateScale(sprite.scaleX, sprite.scaleY, 1) * Matrix.CreateRotationZ(MathHelper.ToRadians(sprite.rotation)) * Matrix.CreateTranslation(sprite.x, sprite.y, 0) * parentMatrix;
+			
 			if(sprite.image != null) {
 				Texture2D texture = GetTexture(sprite.image.name);
 				if(texture != null)
 				{
-					Rectangle source = ToRect(sprite.image.rect);
-					int w = (int)(source.Width * c.scaleX);
-					int h = (int)(source.Height * c.scaleY);
-					SpriteEffects eff = SpriteEffects.None;
-					if( w < 0 ) {
-						w *= -1;
-						eff = eff | SpriteEffects.FlipHorizontally;
-					}
-					if( h < 0 ) {
-						h *= -1;
-						eff = eff | SpriteEffects.FlipVertically;
-					}
-					Rectangle dest = new Rectangle((int)c.x, (int)c.y, w, h);
-					Vector2 pivot = new Vector2((int)(sprite.image.pivot.x), (int)(sprite.image.pivot.y));
-				
-					spriteBatch.Draw( texture, dest, source, Color.White, (float)(c.rotation * Math.PI / 180), pivot, eff, 0);
-
-					// check mouse coords to see if we're in the texture boundaries
-					float mouseX = (m.Position.X - dest.X);
-					float mouseY = (m.Position.Y - dest.Y);
-					float dist = Distance(m.Position.X, dest.X, m.Position.Y, dest.Y);
-					double r = Math.Atan2(mouseY, mouseX) - (c.rotation * Math.PI / 180);
-					mouseX = (float)(Math.Cos(r) * dist) / (c.scaleX >= 0 ? c.scaleX : -c.scaleX);
-					mouseY = (float)(Math.Sin(r) * dist) / (c.scaleY >= 0 ? c.scaleY : -c.scaleY);
-					
-					if(c.scaleY < 0) { mouseY = source.Height - mouseY; }
-					if(c.scaleX < 0) { mouseX = source.Width - mouseX; }
-
-					if(mouseX >= 0 && mouseX < source.Width && mouseY >= 0 && mouseY < source.Height) {
-						// pixel hit test
-						// THIS IS EXPENSIVE AND REQUIRES GARBAGE COLLECTION TO BE CALLED A LOT
-						/*_pixels[0].A = 0;
-						_pixelRect.X = (int)mouseX;
-						_pixelRect.Y = (int)mouseY;
-						texture.GetData<Color>(0, _pixelRect, _pixels, 0, 1);
-						if(_pixels[0].A > 0)
-						{
-							_mouseOver = sprite;
-						}*/
-						_mouseOver = sprite;
-					}
+					_pivot.X = sprite.image.pivot.x;
+					_pivot.Y = sprite.image.pivot.y;
+					_sourceRect.X = sprite.image.rect.x;
+					_sourceRect.Y = sprite.image.rect.y;
+					_sourceRect.Width = (int)sprite.image.rect.width;
+					_sourceRect.Height = (int)sprite.image.rect.height;
+					spriteBatch.Begin(SpriteSortMode.Deferred, null, null, null, RasterizerState.CullNone, null, matrix);
+					spriteBatch.Draw(texture, _empty, _sourceRect, Color.White, 0, _pivot, 1, SpriteEffects.None, 0);
+					spriteBatch.End();
 				}
 			}
+
+			// TODO - Use the mouse state to detect if this sprite is the current object the mouse is over or clicked on.
 
 			int n = sprite.numChildren;
 			for ( int i = 0; i < n; ++i )
 			{
-				DrawSprite(sprite.GetChildAt(i), c, m);
+				DrawSprite(sprite.GetChildAt(i), matrix, mouseState);
 			}
 		}
-
-		private float Distance(float x1, float x2, float y1, float y2)
-		{
-			return (float)Math.Sqrt( ((x1 - x2) * (x1 - x2)) + ((y1 - y2) * (y1 - y2)));
-		}
+		#endregion
 	}
 }
