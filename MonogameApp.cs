@@ -1,4 +1,4 @@
-﻿using Poncho.Display;
+using Poncho.Display;
 using Poncho.Geom;
 using Poncho.Framework;
 using Poncho.Interfaces;
@@ -7,6 +7,7 @@ using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using System.Collections.Generic;
 using System;
+using Poncho.Events;
 
 namespace PonchoMonogame
 {
@@ -27,10 +28,16 @@ namespace PonchoMonogame
 			public Sprite downTarget;
 			public Sprite upTarget;
 			public MouseButton button {get; private set; }
+			public string downEventType { get; private set; }
+			public string upEventType { get; private set; }
+			public string clickEventType { get; private set; }
 
-			public MouseButtonState(MouseButton button)
+			public MouseButtonState(MouseButton button, string downEventType, string upEventType, string clickEventType)
 			{
 				this.button = button;
+				this.downEventType = downEventType;
+				this.upEventType = upEventType;
+				this.clickEventType = clickEventType;
 				downTarget = null;
 				upTarget = null;
 			}
@@ -96,9 +103,9 @@ namespace PonchoMonogame
 			_verts = new Vector2[4];
 
 			_mouseButtonStates = new MouseButtonState[]{
-				new MouseButtonState(MouseButton.LEFT),
-				new MouseButtonState(MouseButton.RIGHT),
-				new MouseButtonState(MouseButton.MIDDLE)
+				new MouseButtonState(MouseButton.LEFT, MouseEvent.MOUSE_DOWN, MouseEvent.MOUSE_UP, MouseEvent.CLICK),
+				new MouseButtonState(MouseButton.RIGHT, MouseEvent.RIGHT_DOWN, MouseEvent.RIGHT_UP, MouseEvent.RIGHT_CLICK),
+				new MouseButtonState(MouseButton.MIDDLE, MouseEvent.MIDDLE_DOWN, MouseEvent.MIDDLE_UP, MouseEvent.MIDDLE_CLICK)
 			};
 		}
 		
@@ -320,6 +327,7 @@ namespace PonchoMonogame
 			{
 				ButtonState buttonState = _mouseState.LeftButton;
 				ButtonState prevState = _prevMouseState.LeftButton;
+				int delta = 0;
 
 				if(_mouseButtonStates[i].button == MouseButton.RIGHT)
 				{
@@ -330,6 +338,7 @@ namespace PonchoMonogame
 				{
 					buttonState = _mouseState.MiddleButton;
 					prevState = _prevMouseState.MiddleButton;
+					delta = _mouseState.ScrollWheelValue - _prevMouseState.ScrollWheelValue;
 				}
 
 				if(_mouseTarget == _prevMouseTarget && _mouseTarget != null) // target hasn't changed
@@ -339,24 +348,29 @@ namespace PonchoMonogame
 						if(buttonState == ButtonState.Pressed) {
 							_mouseButtonStates[i].downTarget = _mouseTarget;
 							_mouseButtonStates[i].upTarget = null;
-							//Console.WriteLine("DOWN!");
+							_mouseTarget.DispatchEvent(new MouseEvent(_mouseButtonStates[i].downEventType));
 							// dispatch down event for the button here
 						}
 						else
 						{
 							_mouseButtonStates[i].upTarget = _mouseTarget;
-							//Console.WriteLine("UP!");
+							_mouseTarget.DispatchEvent(new MouseEvent(_mouseButtonStates[i].upEventType));
 							// dispatch up event for the button here
 						}
 
 						if(_mouseButtonStates[i].downTarget == _mouseButtonStates[i].upTarget)
 						{
 							// dispatch click event for the button here
-							//Console.WriteLine("CLICK!");
 							// clear targets
 							_mouseButtonStates[i].downTarget = null;
 							_mouseButtonStates[i].upTarget = null;
+							_mouseTarget.DispatchEvent(new MouseEvent(_mouseButtonStates[i].clickEventType));
 						}
+					}
+
+					if (delta != 0)
+					{
+						_mouseTarget.DispatchEvent(new MouseEvent(MouseEvent.MOUSE_WHEEL, null, delta));
 					}
 				}
 				else // target changed, clear states
@@ -371,13 +385,13 @@ namespace PonchoMonogame
 				if(_prevMouseTarget != null)
 				{
 					// mouse out event goes here
-					//Console.WriteLine("OUT!");
+					_prevMouseTarget.DispatchEvent( new MouseEvent(MouseEvent.MOUSE_OUT, _mouseTarget));
 				}
 
 				if(_mouseTarget != null)
 				{
 					// mouse over event goes here
-					//Console.WriteLine("OVER!");
+					_mouseTarget.DispatchEvent( new MouseEvent(MouseEvent.MOUSE_OVER, _prevMouseTarget));
 				}
 			}
 
@@ -393,15 +407,17 @@ namespace PonchoMonogame
 		/// <param name="mouseState">MouseState instance</param>
 		private void DrawSprite(Sprite sprite, Matrix parentMatrix)
 		{
+			if(!sprite.visible) return;
+			
 			Matrix matrix =  Matrix.CreateScale(sprite.scaleX, sprite.scaleY, 1) * Matrix.CreateRotationZ(MathHelper.ToRadians(sprite.rotation)) * Matrix.CreateTranslation(sprite.x, sprite.y, 0) * parentMatrix;
 			
 			if(sprite.image != null) {
 				Texture2D texture = GetTexture(sprite.image.name);
-				if(texture != null) // we have a texture, so render it onto the screen
+				if (texture != null) // we have a texture, so render it onto the screen
 				{
 					// set the pivot
-					_pivot.X = sprite.image.pivot.x * sprite.image.rect.width;
-					_pivot.Y = sprite.image.pivot.y * sprite.image.rect.height;
+					_pivot.X = sprite.image.pivot.x*sprite.image.rect.width;
+					_pivot.Y = sprite.image.pivot.y*sprite.image.rect.height;
 
 					// grab the source rect from the texture
 					_sourceRect.X = sprite.image.rect.x;
@@ -415,39 +431,41 @@ namespace PonchoMonogame
 					spriteBatch.End();
 
 					// Use the mouse state to detect if this sprite is the current object the mouse is over or clicked on.
-
-					// Grab the vertices for each corner of the sprite
-					_verts[0].X = -_pivot.X;
-					_verts[0].Y = -_pivot.Y;
-					_verts[1].X = sprite.imageWidth - _pivot.X;
-					_verts[1].Y = -_pivot.Y;
-					_verts[2].X = -_pivot.X;
-					_verts[2].Y = sprite.imageHeight - _pivot.Y;
-					_verts[3].X = sprite.imageWidth - _pivot.X;
-					_verts[3].Y = sprite.imageHeight - _pivot.Y;
-
-					// transform the vertices
-					for( int i = 0; i < 4; ++i )
+					if (!sprite.clickThrough)
 					{
-						ConvertPoint(ref _verts[i], matrix);
-					}
+						// Grab the vertices for each corner of the sprite
+						_verts[0].X = -_pivot.X;
+						_verts[0].Y = -_pivot.Y;
+						_verts[1].X = sprite.imageWidth - _pivot.X;
+						_verts[1].Y = -_pivot.Y;
+						_verts[2].X = -_pivot.X;
+						_verts[2].Y = sprite.imageHeight - _pivot.Y;
+						_verts[3].X = sprite.imageWidth - _pivot.X;
+						_verts[3].Y = sprite.imageHeight - _pivot.Y;
 
-					// sort them by y coordinates and then by x coordinates
-					Array.Sort(_verts, 
-						(j, k) => {
-							if(j.Y < k.Y) return -1;
-							if(j.Y > k.Y) return 1;
-							if(j.X < k.X) return -1;
-							if(j.X > k.X) return 1;
-							return 0;
+						// transform the vertices
+						for( int i = 0; i < 4; ++i )
+						{
+							ConvertPoint(ref _verts[i], matrix);
 						}
-					);
+
+						// sort them by y coordinates and then by x coordinates
+						Array.Sort(_verts, 
+							(j, k) => {
+								if(j.Y < k.Y) return -1;
+								if(j.Y > k.Y) return 1;
+								if(j.X < k.X) return -1;
+								if(j.X > k.X) return 1;
+								return 0;
+							}
+						);
 					
-					// Check to see if the mouse is in the sprite bounds
-					if(PointInTri(_mousePos, _verts[0], _verts[1], _verts[2]) || PointInTri(_mousePos, _verts[2], _verts[1], _verts[3]))
-					{
-						// if so, this is the active mouse target
-						_mouseTarget = sprite;
+						// Check to see if the mouse is in the sprite bounds
+						if(PointInTri(_mousePos, _verts[0], _verts[1], _verts[2]) || PointInTri(_mousePos, _verts[2], _verts[1], _verts[3]))
+						{
+							// if so, this is the active mouse target
+							_mouseTarget = sprite;
+						}
 					}
 				}
 			}
