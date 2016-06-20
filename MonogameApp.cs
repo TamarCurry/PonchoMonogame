@@ -15,6 +15,27 @@ namespace PonchoMonogame
 	/// </summary>
 	public class MonogameApp : Game, IGameApp
 	{
+		private enum MouseButton
+		{
+			LEFT,
+			RIGHT,
+			MIDDLE
+		}
+
+		private struct MouseButtonState
+		{
+			public Sprite downTarget;
+			public Sprite upTarget;
+			public MouseButton button {get; private set; }
+
+			public MouseButtonState(MouseButton button)
+			{
+				this.button = button;
+				downTarget = null;
+				upTarget = null;
+			}
+		}
+
 		private string[] _filetypes =
 		{
 			".jpg", ".png", ".bmp", ".dds", ".ppm", ".tga", ".spritefont"
@@ -27,13 +48,16 @@ namespace PonchoMonogame
 
 		private Action _onInit;
 		private Sprite _mouseTarget;
-		private Sprite _prevMouseOver;
+		private Sprite _prevMouseTarget;
 		private Vector2 _empty;
 		private Vector2 _pivot;
 		private Vector2 _mousePos;
 		private Vector2[] _verts;
 		private Rectangle _sourceRect;
 		private SpriteBatch spriteBatch;
+		private MouseState _mouseState;
+		private MouseButtonState[] _mouseButtonStates;
+		private MouseState _prevMouseState;
 		private UpdateDelegate _onUpdate;
 		private GraphicsDeviceManager graphics;
 		private Dictionary<string, Texture2D> _textures;
@@ -70,6 +94,12 @@ namespace PonchoMonogame
 			_mousePos = new Vector2();
 			_sourceRect = new Rectangle();
 			_verts = new Vector2[4];
+
+			_mouseButtonStates = new MouseButtonState[]{
+				new MouseButtonState(MouseButton.LEFT),
+				new MouseButtonState(MouseButton.RIGHT),
+				new MouseButtonState(MouseButton.MIDDLE)
+			};
 		}
 		
 		// --------------------------------------------------------------
@@ -255,12 +285,13 @@ namespace PonchoMonogame
 		/// <param name="gameTime">Provides a snapshot of timing values.</param>
 		protected override void Draw(GameTime gameTime)
 		{
-			_prevMouseOver = _mouseTarget;
+			_prevMouseTarget = _mouseTarget;
 			_mouseTarget = null;
 			GraphicsDevice.Clear(Color.CornflowerBlue);
-			MouseState m = Mouse.GetState();
-			_mousePos.X = m.Position.X;
-			_mousePos.Y = m.Position.Y;
+			_prevMouseState = _mouseState;
+			_mouseState = Mouse.GetState();
+			_mousePos.X = _mouseState.Position.X;
+			_mousePos.Y = _mouseState.Position.Y;
 			
 			int n = stage.numChildren;
 			Matrix matrix = Matrix.Identity;
@@ -276,10 +307,83 @@ namespace PonchoMonogame
 				else Console.WriteLine("Mouse out");
 			}*/
 
-			_prevMouseOver = null;
+			//Console.WriteLine("Mouse state: {0}", _mouseState.LeftButton);
+			UpdateMouseTargetState();
+			
 			base.Draw(gameTime);
 		}
 		
+		// --------------------------------------------------------------
+		private void UpdateMouseTargetState()
+		{
+			for ( int i = 0; i < _mouseButtonStates.Length; ++i )
+			{
+				ButtonState buttonState = _mouseState.LeftButton;
+				ButtonState prevState = _prevMouseState.LeftButton;
+
+				if(_mouseButtonStates[i].button == MouseButton.RIGHT)
+				{
+					buttonState = _mouseState.RightButton;
+					prevState = _prevMouseState.RightButton;
+				}
+				else if ( _mouseButtonStates[i].button == MouseButton.MIDDLE )
+				{
+					buttonState = _mouseState.MiddleButton;
+					prevState = _prevMouseState.MiddleButton;
+				}
+
+				if(_mouseTarget == _prevMouseTarget && _mouseTarget != null) // target hasn't changed
+				{
+					if(buttonState != prevState) // state changed
+					{
+						if(buttonState == ButtonState.Pressed) {
+							_mouseButtonStates[i].downTarget = _mouseTarget;
+							_mouseButtonStates[i].upTarget = null;
+							//Console.WriteLine("DOWN!");
+							// dispatch down event for the button here
+						}
+						else
+						{
+							_mouseButtonStates[i].upTarget = _mouseTarget;
+							//Console.WriteLine("UP!");
+							// dispatch up event for the button here
+						}
+
+						if(_mouseButtonStates[i].downTarget == _mouseButtonStates[i].upTarget)
+						{
+							// dispatch click event for the button here
+							//Console.WriteLine("CLICK!");
+							// clear targets
+							_mouseButtonStates[i].downTarget = null;
+							_mouseButtonStates[i].upTarget = null;
+						}
+					}
+				}
+				else // target changed, clear states
+				{
+					_mouseButtonStates[i].upTarget = null;
+					_mouseButtonStates[i].downTarget = null;
+				}
+			}
+			
+			if(_prevMouseTarget != _mouseTarget)
+			{
+				if(_prevMouseTarget != null)
+				{
+					// mouse out event goes here
+					//Console.WriteLine("OUT!");
+				}
+
+				if(_mouseTarget != null)
+				{
+					// mouse over event goes here
+					//Console.WriteLine("OVER!");
+				}
+			}
+
+			_prevMouseTarget = null;
+		}
+
 		// --------------------------------------------------------------
 		/// <summary>
 		/// Draws a sprite to the screen.
