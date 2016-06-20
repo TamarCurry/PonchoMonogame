@@ -26,10 +26,12 @@ namespace PonchoMonogame
 		private bool _started;
 
 		private Action _onInit;
-		private Sprite _mouseOver;
+		private Sprite _mouseTarget;
 		private Sprite _prevMouseOver;
 		private Vector2 _empty;
 		private Vector2 _pivot;
+		private Vector2 _mousePos;
+		private Vector2[] _verts;
 		private Rectangle _sourceRect;
 		private SpriteBatch spriteBatch;
 		private UpdateDelegate _onUpdate;
@@ -65,7 +67,9 @@ namespace PonchoMonogame
 			_textures = new Dictionary<string, Texture2D>();
 			_empty = new Vector2();
 			_pivot = new Vector2();
+			_mousePos = new Vector2();
 			_sourceRect = new Rectangle();
+			_verts = new Vector2[4];
 		}
 		
 		// --------------------------------------------------------------
@@ -132,7 +136,7 @@ namespace PonchoMonogame
 		{
 			name = name ?? path;
 			Texture2D texture = GetTexture(path, name);
-			rect = rect ?? new ImageRect(0, 0, (uint)texture.Width, (uint)texture.Height);
+			rect = rect ?? new ImageRect(0, 0, (ushort)texture.Width, (ushort)texture.Height);
 			pivot = pivot ?? new Pivot(0, 0);
 			return new MonogameImage(name, rect, pivot);
 		}
@@ -251,26 +255,29 @@ namespace PonchoMonogame
 		/// <param name="gameTime">Provides a snapshot of timing values.</param>
 		protected override void Draw(GameTime gameTime)
 		{
-			_prevMouseOver = _mouseOver;
-			_mouseOver = null;
+			_prevMouseOver = _mouseTarget;
+			_mouseTarget = null;
 			GraphicsDevice.Clear(Color.CornflowerBlue);
 			MouseState m = Mouse.GetState();
+			_mousePos.X = m.Position.X;
+			_mousePos.Y = m.Position.Y;
 			
 			int n = stage.numChildren;
 			Matrix matrix = Matrix.Identity;
 			for ( int i = 0; i < n; ++i )
 			{
-				DrawSprite(stage.GetChildAt(i), matrix, m);
+				DrawSprite(stage.GetChildAt(i), matrix);
 			}
 			
-			base.Draw(gameTime);
-
-			if(_mouseOver != _prevMouseOver)
+			// debug to see if the mouse target changed
+			/*if(_mouseTarget != _prevMouseOver)
 			{
-				//if(_mouseOver != null) Console.WriteLine("Mouse over");
-				//else Console.WriteLine("Mouse out");
-			}
+				if(_mouseTarget != null) Console.WriteLine("Mouse over");
+				else Console.WriteLine("Mouse out");
+			}*/
+
 			_prevMouseOver = null;
+			base.Draw(gameTime);
 		}
 		
 		// --------------------------------------------------------------
@@ -280,33 +287,122 @@ namespace PonchoMonogame
 		/// <param name="sprite">Sprite to be rendered.</param>
 		/// <param name="parentMatrix">Current matrix to use for positioning, rotating, and scaling the sprite.</param>
 		/// <param name="mouseState">MouseState instance</param>
-		private void DrawSprite(Sprite sprite, Matrix parentMatrix, MouseState mouseState)
+		private void DrawSprite(Sprite sprite, Matrix parentMatrix)
 		{
 			Matrix matrix =  Matrix.CreateScale(sprite.scaleX, sprite.scaleY, 1) * Matrix.CreateRotationZ(MathHelper.ToRadians(sprite.rotation)) * Matrix.CreateTranslation(sprite.x, sprite.y, 0) * parentMatrix;
 			
 			if(sprite.image != null) {
 				Texture2D texture = GetTexture(sprite.image.name);
-				if(texture != null)
+				if(texture != null) // we have a texture, so render it onto the screen
 				{
-					_pivot.X = sprite.image.pivot.x;
-					_pivot.Y = sprite.image.pivot.y;
+					// set the pivot
+					_pivot.X = sprite.image.pivot.x * sprite.image.rect.width;
+					_pivot.Y = sprite.image.pivot.y * sprite.image.rect.height;
+
+					// grab the source rect from the texture
 					_sourceRect.X = sprite.image.rect.x;
 					_sourceRect.Y = sprite.image.rect.y;
-					_sourceRect.Width = (int)sprite.image.rect.width;
-					_sourceRect.Height = (int)sprite.image.rect.height;
+					_sourceRect.Width = sprite.image.rect.width;
+					_sourceRect.Height = sprite.image.rect.height;
+
+					// setup the render with the appropriate matrix and draw it
 					spriteBatch.Begin(SpriteSortMode.Deferred, null, null, null, RasterizerState.CullNone, null, matrix);
 					spriteBatch.Draw(texture, _empty, _sourceRect, Color.White, 0, _pivot, 1, SpriteEffects.None, 0);
 					spriteBatch.End();
+
+					// Use the mouse state to detect if this sprite is the current object the mouse is over or clicked on.
+
+					// Grab the vertices for each corner of the sprite
+					_verts[0].X = -_pivot.X;
+					_verts[0].Y = -_pivot.Y;
+					_verts[1].X = sprite.imageWidth - _pivot.X;
+					_verts[1].Y = -_pivot.Y;
+					_verts[2].X = -_pivot.X;
+					_verts[2].Y = sprite.imageHeight - _pivot.Y;
+					_verts[3].X = sprite.imageWidth - _pivot.X;
+					_verts[3].Y = sprite.imageHeight - _pivot.Y;
+
+					// transform the vertices
+					for( int i = 0; i < 4; ++i )
+					{
+						ConvertPoint(ref _verts[i], matrix);
+					}
+
+					// sort them by y coordinates and then by x coordinates
+					Array.Sort(_verts, 
+						(j, k) => {
+							if(j.Y < k.Y) return -1;
+							if(j.Y > k.Y) return 1;
+							if(j.X < k.X) return -1;
+							if(j.X > k.X) return 1;
+							return 0;
+						}
+					);
+					
+					// Check to see if the mouse is in the sprite bounds
+					if(PointInTri(_mousePos, _verts[0], _verts[1], _verts[2]) || PointInTri(_mousePos, _verts[2], _verts[1], _verts[3]))
+					{
+						// if so, this is the active mouse target
+						_mouseTarget = sprite;
+					}
 				}
 			}
-
-			// TODO - Use the mouse state to detect if this sprite is the current object the mouse is over or clicked on.
-
+			
+			// now, render all the children
 			int n = sprite.numChildren;
 			for ( int i = 0; i < n; ++i )
 			{
-				DrawSprite(sprite.GetChildAt(i), matrix, mouseState);
+				DrawSprite(sprite.GetChildAt(i), matrix);
 			}
+		}
+		
+		// --------------------------------------------------------------
+		/// <summary>
+		/// Checks to see if the specified point lies within the three other points
+		/// </summary>
+		/// <param name="pt"></param>
+		/// <param name="a"></param>
+		/// <param name="b"></param>
+		/// <param name="c"></param>
+		/// <returns></returns>
+		private bool PointInTri( Vector2 pt, Vector2 a, Vector2 b, Vector2 c)
+		{
+			bool b1, b2, b3;
+
+			b1 = GetSign(pt, a, b) < 0.0f;
+			b2 = GetSign(pt, b, c) < 0.0f;
+			b3 = GetSign(pt, c, a) < 0.0f;
+
+			return ((b1 == b2) && (b2 == b3));
+		}
+		
+		// --------------------------------------------------------------
+		private float GetSign( Vector2 a, Vector2 b, Vector2 c )
+		{
+			return (a.X - c.X) * (b.Y - c.Y) - (b.X - c.X) * (a.Y - c.Y);
+		}
+		
+		// --------------------------------------------------------------
+		
+		/// <summary>
+		/// Adjusts the specified point using the specified matrix.
+		/// </summary>
+		/// <param name="pt"></param>
+		/// <param name="m"></param>
+		private void ConvertPoint( ref Vector2 pt, Matrix m )
+		{
+			float a		= m.M11;
+			float b		= m.M12;
+			float c		= m.M21;
+			float d		= m.M22;
+			float tx	= m.M41;
+			float ty	= m.M42;
+			
+			float x		= (pt.X * a) + (pt.Y * c) + tx;
+			float y		= (pt.X * b) + (pt.Y * d) + ty;
+
+			pt.X		= x;
+			pt.Y		= y;
 		}
 		#endregion
 	}
