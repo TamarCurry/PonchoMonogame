@@ -7,7 +7,10 @@ using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using System.Collections.Generic;
 using System;
+using System.Text;
+using System.Text.RegularExpressions;
 using Poncho.Events;
+using Poncho.Text;
 
 namespace PonchoMonogame
 {
@@ -57,17 +60,19 @@ namespace PonchoMonogame
 		private Sprite _mouseTarget;
 		private Sprite _prevMouseTarget;
 		private Vector2 _empty;
+		private Vector2 _scale;
 		private Vector2 _pivot;
 		private Vector2 _mousePos;
 		private Vector2[] _verts;
 		private Rectangle _sourceRect;
-		private SpriteBatch spriteBatch;
 		private MouseState _mouseState;
-		private MouseButtonState[] _mouseButtonStates;
 		private MouseState _prevMouseState;
+		private SpriteBatch spriteBatch;
 		private UpdateDelegate _onUpdate;
+		private MouseButtonState[] _mouseButtonStates;
 		private GraphicsDeviceManager graphics;
 		private Dictionary<string, Texture2D> _textures;
+		private Dictionary<string, SpriteFont> _fonts;
 
 		#region GETTERS
 		public int fpsInterval { get { return _fpsInterval; } set { _fpsInterval = value > 0 ? value : 1000; } }
@@ -96,8 +101,10 @@ namespace PonchoMonogame
 			_onInit = onInit;
 			_onUpdate = () => { };
 			_textures = new Dictionary<string, Texture2D>();
+			_fonts = new Dictionary<string, SpriteFont>();
 			_empty = new Vector2();
 			_pivot = new Vector2();
+			_scale = new Vector2(1, 1);
 			_mousePos = new Vector2();
 			_sourceRect = new Rectangle();
 			_verts = new Vector2[4];
@@ -161,21 +168,37 @@ namespace PonchoMonogame
 		/// </summary>
 		/// <param name="path">Path of the image to be loaded.</param>
 		/// <returns></returns>
-		public ITextureImage GetImage(string path) { return GetImage(path, null, null, null); }
-		public ITextureImage GetImage(string path, Pivot pivot) { return GetImage(path, null, null, pivot); }
-		public ITextureImage GetImage(string path, string name) { return GetImage(path, name, null, null); }
-		public ITextureImage GetImage(string path, ImageRect rect) { return GetImage(path, null, rect, null); }
-		public ITextureImage GetImage(string path, string name, Pivot pivot) { return GetImage(path, name, null, pivot); }
-		public ITextureImage GetImage(string path, ImageRect rect, Pivot pivot) { return GetImage(path, null, rect, pivot); }
-		public ITextureImage GetImage(string path, string name, ImageRect rect) { return GetImage(path, name, rect, null); }
+		public Image GetImage(string path) { return GetImage(path, null, null, null); }
+		public Image GetImage(string path, Pivot pivot) { return GetImage(path, null, null, pivot); }
+		public Image GetImage(string path, string name) { return GetImage(path, name, null, null); }
+		public Image GetImage(string path, ImageRect rect) { return GetImage(path, null, rect, null); }
+		public Image GetImage(string path, string name, Pivot pivot) { return GetImage(path, name, null, pivot); }
+		public Image GetImage(string path, ImageRect rect, Pivot pivot) { return GetImage(path, null, rect, pivot); }
+		public Image GetImage(string path, string name, ImageRect rect) { return GetImage(path, name, rect, null); }
 
-		public ITextureImage GetImage(string path, string name, ImageRect rect, Pivot pivot)
+		public Image GetImage(string path, string name, ImageRect rect, Pivot pivot)
 		{
 			name = name ?? path;
 			Texture2D texture = GetTexture(path, name);
+			if (texture == null) return null;
 			rect = rect ?? new ImageRect(0, 0, (ushort)texture.Width, (ushort)texture.Height);
 			pivot = pivot ?? new Pivot(0, 0);
-			return new MonogameImage(name, rect, pivot);
+			return new Image(name, rect, pivot);
+		}
+		
+		// --------------------------------------------------------------
+		public TextFormat GetTextFormat(string path, ushort size)
+		{
+			return GetTextFormat(path, path, size);
+		}
+		
+		// --------------------------------------------------------------
+		public TextFormat GetTextFormat(string path, string name, ushort size)
+		{
+			name = name ?? path;
+			SpriteFont font = GetFont(path, name);
+			if (font == null) return null;
+			return new TextFormat(name, size);
 		}
 		
 		// --------------------------------------------------------------
@@ -187,16 +210,14 @@ namespace PonchoMonogame
 		/// <returns></returns>
 		private Texture2D GetTexture(string path, string name)
 		{
-			if(!_textures.ContainsKey(name))
+			Texture2D t = null;
+			if(!_textures.TryGetValue(name, out t))
 			{
-				Texture2D t = Content.Load<Texture2D>(GetPath(path));
-				if(t != null)
-				{
-					_textures.Add(name, t);
-				}
+				t = Content.Load<Texture2D>(GetPath(path));
+				if(t != null) _textures.Add(name, t);
 			}
-
-			return _textures[name];
+			
+			return t;
 		}
 		
 		// --------------------------------------------------------------
@@ -207,7 +228,35 @@ namespace PonchoMonogame
 		/// <returns></returns>
 		private Texture2D GetTexture(string name)
 		{
-			return _textures.ContainsKey(name) ? _textures[name] : null;
+			Texture2D t = null;
+			_textures.TryGetValue(name, out t);
+			return t;
+		}
+		
+		// --------------------------------------------------------------
+		private SpriteFont GetFont(string name, string path)
+		{
+			SpriteFont font = null;
+			if (!_fonts.TryGetValue(name, out font))
+			{
+				font = Content.Load<SpriteFont>(GetPath(path));
+				if (font != null) _fonts.Add(name, font);
+			}
+			
+			return font;
+		}
+		
+		// --------------------------------------------------------------
+		/// <summary>
+		/// Returns a texture.
+		/// </summary>
+		/// <param name="name">Unique name of the texture.</param>
+		/// <returns></returns>
+		private SpriteFont GetFont(string name)
+		{
+			SpriteFont font = null;
+			_fonts.TryGetValue(name, out font);
+			return font;
 		}
 		
 		// --------------------------------------------------------------
@@ -307,14 +356,6 @@ namespace PonchoMonogame
 				DrawSprite(stage.GetChildAt(i), matrix);
 			}
 			
-			// debug to see if the mouse target changed
-			/*if(_mouseTarget != _prevMouseOver)
-			{
-				if(_mouseTarget != null) Console.WriteLine("Mouse over");
-				else Console.WriteLine("Mouse out");
-			}*/
-
-			//Console.WriteLine("Mouse state: {0}", _mouseState.LeftButton);
 			UpdateMouseTargetState();
 			
 			base.Draw(gameTime);
@@ -410,63 +451,56 @@ namespace PonchoMonogame
 			if(!sprite.visible) return;
 			
 			Matrix matrix =  Matrix.CreateScale(sprite.scaleX, sprite.scaleY, 1) * Matrix.CreateRotationZ(MathHelper.ToRadians(sprite.rotation)) * Matrix.CreateTranslation(sprite.x, sprite.y, 0) * parentMatrix;
-			
-			if(sprite.image != null) {
-				Texture2D texture = GetTexture(sprite.image.name);
-				if (texture != null) // we have a texture, so render it onto the screen
+
+			int w = 0;
+			int h = 0;
+
+			if (sprite is TextField)
+			{
+				RenderText(sprite as TextField, matrix);
+			}
+			else if (RenderSpriteImage(sprite, matrix))
+			{
+				w = sprite.imageWidth;
+				h = sprite.imageHeight;
+			}
+
+			if (w != 0 && h != 0 && !sprite.clickThrough)
+			{
+				// Use the mouse state to detect if this sprite is the current object the mouse is over or clicked on.
+				
+				// Grab the vertices for each corner of the sprite
+				_verts[0].X = -_pivot.X;
+				_verts[0].Y = -_pivot.Y;
+				_verts[1].X = sprite.imageWidth - _pivot.X;
+				_verts[1].Y = -_pivot.Y;
+				_verts[2].X = -_pivot.X;
+				_verts[2].Y = sprite.imageHeight - _pivot.Y;
+				_verts[3].X = sprite.imageWidth - _pivot.X;
+				_verts[3].Y = sprite.imageHeight - _pivot.Y;
+
+				// transform the vertices
+				for( int i = 0; i < 4; ++i )
 				{
-					// set the pivot
-					_pivot.X = sprite.image.pivot.x*sprite.image.rect.width;
-					_pivot.Y = sprite.image.pivot.y*sprite.image.rect.height;
+					ConvertPoint(ref _verts[i], matrix);
+				}
 
-					// grab the source rect from the texture
-					_sourceRect.X = sprite.image.rect.x;
-					_sourceRect.Y = sprite.image.rect.y;
-					_sourceRect.Width = sprite.image.rect.width;
-					_sourceRect.Height = sprite.image.rect.height;
-
-					// setup the render with the appropriate matrix and draw it
-					spriteBatch.Begin(SpriteSortMode.Deferred, null, null, null, RasterizerState.CullNone, null, matrix);
-					spriteBatch.Draw(texture, _empty, _sourceRect, Color.White, 0, _pivot, 1, SpriteEffects.None, 0);
-					spriteBatch.End();
-
-					// Use the mouse state to detect if this sprite is the current object the mouse is over or clicked on.
-					if (!sprite.clickThrough)
-					{
-						// Grab the vertices for each corner of the sprite
-						_verts[0].X = -_pivot.X;
-						_verts[0].Y = -_pivot.Y;
-						_verts[1].X = sprite.imageWidth - _pivot.X;
-						_verts[1].Y = -_pivot.Y;
-						_verts[2].X = -_pivot.X;
-						_verts[2].Y = sprite.imageHeight - _pivot.Y;
-						_verts[3].X = sprite.imageWidth - _pivot.X;
-						_verts[3].Y = sprite.imageHeight - _pivot.Y;
-
-						// transform the vertices
-						for( int i = 0; i < 4; ++i )
-						{
-							ConvertPoint(ref _verts[i], matrix);
-						}
-
-						// sort them by y coordinates and then by x coordinates
-						Array.Sort(_verts, 
-							(j, k) => {
-								if(j.Y < k.Y) return -1;
-								if(j.Y > k.Y) return 1;
-								if(j.X < k.X) return -1;
-								if(j.X > k.X) return 1;
-								return 0;
-							}
-						);
-					
-						// Check to see if the mouse is in the sprite bounds
-						if(PointInTri(_mousePos, _verts[0], _verts[1], _verts[2]) || PointInTri(_mousePos, _verts[2], _verts[1], _verts[3]))
-						{
-							// if so, this is the active mouse target
-							_mouseTarget = sprite;
-						}
+				// sort them by y coordinates and then by x coordinates
+				Array.Sort(_verts, 
+					(j, k) => {
+						if(j.Y < k.Y) return -1;
+						if(j.Y > k.Y) return 1;
+						if(j.X < k.X) return -1;
+						if(j.X > k.X) return 1;
+						return 0;
 					}
+				);
+					
+				// Check to see if the mouse is in the sprite bounds
+				if(PointInTri(_mousePos, _verts[0], _verts[1], _verts[2]) || PointInTri(_mousePos, _verts[2], _verts[1], _verts[3]))
+				{
+					// if so, this is the active mouse target
+					_mouseTarget = sprite;
 				}
 			}
 			
@@ -478,6 +512,114 @@ namespace PonchoMonogame
 			}
 		}
 		
+		// --------------------------------------------------------------
+		private bool RenderText(TextField textField, Matrix matrix)
+		{
+			if (!string.IsNullOrWhiteSpace(textField.text) && textField.format != null)
+			{
+				SpriteFont font = GetFont(textField.format.font);
+				if (font != null)
+				{
+					string text = textField.text;
+					
+					if (!textField.multiline)
+					{
+						Regex reg = new Regex("\n|\r", RegexOptions.IgnoreCase);
+						text = reg.Replace(text, " ");
+					}
+
+					ushort w = 0;
+					ushort h = 0;
+					if (textField.clipOverflow)
+					{
+						_sourceRect.X = 0;
+						_sourceRect.Y = 0;
+						w = textField.width;
+						h = textField.height;
+						_sourceRect.Width = textField.width;
+						_sourceRect.Height = textField.height;
+						if (textField.wordWrap && w > 0 && h > 0)
+						{
+							WrapText(font, text, w);
+						}
+					}
+					else
+					{
+						Vector2 v = font.MeasureString(text);
+						w = (ushort) v.X;
+						h = (ushort) v.Y;
+					}
+
+					_pivot.X = textField.pivotX*w;
+					_pivot.Y = textField.pivotY*h;
+
+					spriteBatch.Begin(SpriteSortMode.Deferred, null, null, null, RasterizerState.CullNone, null, matrix);
+					spriteBatch.DrawString(font, textField.text, _empty, Color.Black, 0, _pivot, _scale, SpriteEffects.None, 0);
+					spriteBatch.End();
+					return true;
+				}
+			}
+
+			return false;
+		}
+		
+		// --------------------------------------------------------------
+		public string WrapText(SpriteFont spriteFont, string text, ushort maxLineWidth)
+		{
+			string[] words = text.Split(' ');
+			StringBuilder sb = new StringBuilder();
+			float lineWidth = 0f;
+			float spaceWidth = spriteFont.MeasureString(" ").X;
+
+			foreach (string word in words)
+			{
+				Vector2 size = spriteFont.MeasureString(word);
+
+				if (lineWidth + size.X < maxLineWidth)
+				{
+					sb.Append(word + " ");
+					lineWidth += size.X + spaceWidth;
+				}
+				else
+				{
+					sb.Append("\n" + word + " ");
+					lineWidth = size.X + spaceWidth;
+				}
+			}
+
+			return sb.ToString();
+		}
+
+		// --------------------------------------------------------------
+		private bool RenderSpriteImage(Sprite sprite, Matrix matrix)
+		{
+			if (sprite.image != null)
+			{
+				Texture2D texture = GetTexture(sprite.image.name);
+				if (texture != null) // we have a texture, so render it onto the screen
+				{
+					// set the pivot
+					_pivot.X = sprite.pivotX*sprite.image.rect.width;
+					_pivot.Y = sprite.pivotY*sprite.image.rect.height;
+
+					// grab the source rect from the texture
+					_sourceRect.X = sprite.image.rect.x;
+					_sourceRect.Y = sprite.image.rect.y;
+					_sourceRect.Width = sprite.imageWidth;
+					_sourceRect.Height = sprite.imageHeight;
+
+					// setup the render with the appropriate matrix and draw it
+					spriteBatch.Begin(SpriteSortMode.Deferred, null, null, null, RasterizerState.CullNone, null, matrix);
+					spriteBatch.Draw(texture, _empty, _sourceRect, Color.White, 0, _pivot, 1, SpriteEffects.None, 0);
+					spriteBatch.End();
+
+					return true;
+				}
+			}
+
+			return false;
+		}
+
 		// --------------------------------------------------------------
 		/// <summary>
 		/// Checks to see if the specified point lies within the three other points
