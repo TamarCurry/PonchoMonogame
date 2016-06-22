@@ -45,7 +45,7 @@ namespace PonchoMonogame
 				upTarget = null;
 			}
 		}
-
+		
 		private string[] _filetypes =
 		{
 			".jpg", ".png", ".bmp", ".dds", ".ppm", ".tga", ".spritefont"
@@ -68,11 +68,13 @@ namespace PonchoMonogame
 		private MouseState _mouseState;
 		private MouseState _prevMouseState;
 		private SpriteBatch spriteBatch;
+		private MonogameAudio _audio;
 		private UpdateDelegate _onUpdate;
+		private MonogameTextures _textures;
 		private MouseButtonState[] _mouseButtonStates;
 		private GraphicsDeviceManager graphics;
-		private Dictionary<string, Texture2D> _textures;
 		private Dictionary<string, SpriteFont> _fonts;
+		
 
 		#region GETTERS
 		public int fpsInterval { get { return _fpsInterval; } set { _fpsInterval = value > 0 ? value : 1000; } }
@@ -100,7 +102,6 @@ namespace PonchoMonogame
 			fpsInterval = 1000;
 			_onInit = onInit;
 			_onUpdate = () => { };
-			_textures = new Dictionary<string, Texture2D>();
 			_fonts = new Dictionary<string, SpriteFont>();
 			_empty = new Vector2();
 			_pivot = new Vector2();
@@ -108,7 +109,9 @@ namespace PonchoMonogame
 			_mousePos = new Vector2();
 			_sourceRect = new Rectangle();
 			_verts = new Vector2[4];
-
+			_audio = new MonogameAudio(Content);
+			_textures = new MonogameTextures(Content);
+			
 			_mouseButtonStates = new MouseButtonState[]{
 				new MouseButtonState(MouseButton.LEFT, MouseEvent.MOUSE_DOWN, MouseEvent.MOUSE_UP, MouseEvent.CLICK),
 				new MouseButtonState(MouseButton.RIGHT, MouseEvent.RIGHT_DOWN, MouseEvent.RIGHT_UP, MouseEvent.RIGHT_CLICK),
@@ -210,14 +213,7 @@ namespace PonchoMonogame
 		/// <returns></returns>
 		private Texture2D GetTexture(string path, string name)
 		{
-			Texture2D t = null;
-			if(!_textures.TryGetValue(name, out t))
-			{
-				t = Content.Load<Texture2D>(GetPath(path));
-				if(t != null) _textures.Add(name, t);
-			}
-			
-			return t;
+			return _textures.GetTexture(path, name);
 		}
 		
 		// --------------------------------------------------------------
@@ -228,9 +224,7 @@ namespace PonchoMonogame
 		/// <returns></returns>
 		private Texture2D GetTexture(string name)
 		{
-			Texture2D t = null;
-			_textures.TryGetValue(name, out t);
-			return t;
+			return _textures.GetTexture(name);
 		}
 		
 		// --------------------------------------------------------------
@@ -330,6 +324,7 @@ namespace PonchoMonogame
 
 			// TODO: Add your update logic here
 			UpdateTime((int)gameTime.TotalGameTime.TotalMilliseconds);
+			_audio.Update();
 			_onUpdate();
 			base.Update(gameTime);
 		}
