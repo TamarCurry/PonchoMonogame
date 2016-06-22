@@ -1,9 +1,3 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
 namespace PonchoMonogame
 {
 	internal class MonogameFuncs
@@ -27,7 +21,7 @@ namespace PonchoMonogame
 				if( s.EndsWith(extension) )
 				{
 					int i = s.IndexOf(extension);
-					return s.Substring(0, i);
+					return path.Substring(0, i);
 				}
 			}
 			return s;
