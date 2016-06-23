@@ -161,34 +161,29 @@ namespace PonchoMonogame
 		// --------------------------------------------------------------
 		private bool RenderSpriteImage(Sprite sprite, Matrix matrix)
 		{
-			if (sprite.image != null)
-			{
-				Texture2D texture = _images.GetTexture(sprite.image.name);
-				if (texture != null) // we have a texture, so render it onto the screen
-				{
-					// set the pivot
-					_pivot.X = sprite.pivotX;
-					_pivot.Y = sprite.pivotY;
+			Texture2D texture = (sprite.image as MonogameImage)?.texture;
 
-					// grab the source rect from the texture
-					_sourceRect.X = sprite.image.rect.x;
-					_sourceRect.Y = sprite.image.rect.y;
-					_sourceRect.Width = sprite.imageWidth;
-					_sourceRect.Height = sprite.imageHeight;
+			if (texture == null || texture.IsDisposed) return false;
 
-					// setup the render with the appropriate matrix and draw it
-					_spriteBatch.Begin(SpriteSortMode.Deferred, null, null, null, RasterizerState.CullNone, null, matrix);
-					_spriteBatch.Draw(texture, Vector2.Zero, _sourceRect, Color.White, 0, _pivot, 1, SpriteEffects.None, 0);
-					_spriteBatch.End();
+			// set the pivot
+			_pivot.X = sprite.pivotX;
+			_pivot.Y = sprite.pivotY;
 
-					_renderW = sprite.imageWidth;
-					_renderH = sprite.imageHeight;
+			// grab the source rect from the texture
+			_sourceRect.X = sprite.image.rect.x;
+			_sourceRect.Y = sprite.image.rect.y;
+			_sourceRect.Width = sprite.imageWidth;
+			_sourceRect.Height = sprite.imageHeight;
 
-					return true;
-				}
-			}
+			// setup the render with the appropriate matrix and draw it
+			_spriteBatch.Begin(SpriteSortMode.Deferred, null, null, null, RasterizerState.CullNone, null, matrix);
+			_spriteBatch.Draw(texture, Vector2.Zero, _sourceRect, Color.White, 0, _pivot, 1, SpriteEffects.None, 0);
+			_spriteBatch.End();
 
-			return false;
+			_renderW = sprite.imageWidth;
+			_renderH = sprite.imageHeight;
+
+			return true;
 		}
 		
 		// --------------------------------------------------------------

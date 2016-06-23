@@ -84,7 +84,7 @@ namespace PonchoMonogame
 			rect = rect ?? new ImageRect(x, y, w, h);
 			pivot = pivot ?? new Pivot(pX, pY);
 			
-			return new Image(name, rect, pivot);
+			return new MonogameImage(name, texture, rect, pivot);
 		}
 
 		// --------------------------------------------------------------
