@@ -307,6 +307,7 @@ namespace PonchoMonogame
 					{
 						index = i;
 					}
+					else if ( _activeAudio[i].name == name && _activeAudio[i].settings.timeUntilRepeatMs > 0)
 					{
 						return null;
 					}
