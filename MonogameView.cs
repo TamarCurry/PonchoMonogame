@@ -40,7 +40,9 @@ namespace PonchoMonogame
 				upTarget = null;
 			}
 		}
-		
+
+		private ushort _renderW;
+		private ushort _renderH;
 		private Vector2 _pivot;
 		private Vector2 _mousePos;
 		private Vector2[] _verts;
@@ -89,9 +91,9 @@ namespace PonchoMonogame
 			if(!displayObject.visible) return;
 			
 			Matrix matrix =  Matrix.CreateScale(displayObject.scaleX, displayObject.scaleY, 1) * Matrix.CreateRotationZ(MathHelper.ToRadians(displayObject.rotation)) * Matrix.CreateTranslation(displayObject.x, displayObject.y, 0) * parentMatrix;
-
-			int w = 0;
-			int h = 0;
+			
+			_renderW = 0;
+			_renderH = 0;
 			bool clickThrough = false;
 
 			Sprite sprite = displayObject as Sprite;
@@ -103,24 +105,22 @@ namespace PonchoMonogame
 			}
 			else if (sprite != null && RenderSpriteImage(sprite, matrix))
 			{
-				w = sprite.imageWidth;
-				h = sprite.imageHeight;
 				clickThrough = sprite.clickThrough;
 			}
 
-			if (w != 0 && h != 0 && !clickThrough)
+			if (_renderW != 0 && _renderH != 0 && !clickThrough)
 			{
 				// Use the mouse state to detect if this sprite is the current object the mouse is over or clicked on.
 				
 				// Grab the vertices for each corner of the sprite
 				_verts[0].X = -_pivot.X;
 				_verts[0].Y = -_pivot.Y;
-				_verts[1].X = w - _pivot.X;
+				_verts[1].X = _renderW - _pivot.X;
 				_verts[1].Y = -_pivot.Y;
 				_verts[2].X = -_pivot.X;
-				_verts[2].Y = h - _pivot.Y;
-				_verts[3].X = w - _pivot.X;
-				_verts[3].Y = h - _pivot.Y;
+				_verts[2].Y = _renderH - _pivot.Y;
+				_verts[3].X = _renderW - _pivot.X;
+				_verts[3].Y = _renderH - _pivot.Y;
 
 				// transform the vertices
 				for( int i = 0; i < 4; ++i )
@@ -181,6 +181,9 @@ namespace PonchoMonogame
 					_spriteBatch.Draw(texture, Vector2.Zero, _sourceRect, Color.White, 0, _pivot, 1, SpriteEffects.None, 0);
 					_spriteBatch.End();
 
+					_renderW = sprite.imageWidth;
+					_renderH = sprite.imageHeight;
+
 					return true;
 				}
 			}
@@ -203,35 +206,34 @@ namespace PonchoMonogame
 						Regex reg = new Regex("\n|\r", RegexOptions.IgnoreCase);
 						text = reg.Replace(text, " ");
 					}
-
-					ushort w = 0;
-					ushort h = 0;
+					
 					if (textField.clipOverflow)
 					{
 						_sourceRect.X = 0;
 						_sourceRect.Y = 0;
-						w = textField.width;
-						h = textField.height;
+						_renderW = textField.width;
+						_renderH = textField.height;
 						_sourceRect.Width = textField.width;
 						_sourceRect.Height = textField.height;
-						if (textField.wordWrap && w > 0 && h > 0)
+						if (textField.wordWrap && _renderW > 0 && _renderH > 0)
 						{
-							WrapText(font, text, w);
+							WrapText(font, text, _renderW);
 						}
 					}
 					else
 					{
 						Vector2 v = font.MeasureString(text);
-						w = (ushort) v.X;
-						h = (ushort) v.Y;
+						_renderW = (ushort) v.X;
+						_renderH = (ushort) v.Y;
 					}
 
-					_pivot.X = textField.pivotX*w;
-					_pivot.Y = textField.pivotY*h;
+					_pivot.X = textField.pivotX*_renderW;
+					_pivot.Y = textField.pivotY*_renderH;
 
 					_spriteBatch.Begin(SpriteSortMode.Deferred, null, null, null, RasterizerState.CullNone, null, matrix);
 					_spriteBatch.DrawString(font, textField.text, Vector2.Zero, Color.Black, 0, _pivot, Vector2.One, SpriteEffects.None, 0);
 					_spriteBatch.End();
+					
 					return true;
 				}
 			}
