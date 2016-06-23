@@ -34,7 +34,7 @@ namespace PonchoMonogame
 		public int time { get; private set; }
 		public int deltaTimeMs { get; private set; }
 		public float deltaTime { get; private set; }
-		public Stage stage { get; private set; }
+		public Stage stage { get { return Stage.instance; } }
 		public IAppAudio audio { get { return _audio; } }
 		public IAppImages images { get { return _images; } }
 		#endregion
@@ -133,7 +133,6 @@ namespace PonchoMonogame
 		protected override void Initialize()
 		{
 			// TODO: Add your initialization logic here
-			stage = new Stage();
 			base.Initialize();
 			_onInit?.Invoke();
 		}
