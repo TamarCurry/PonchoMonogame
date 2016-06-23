@@ -81,12 +81,12 @@ namespace PonchoMonogame
 			_mousePos.X = _mouseState.Position.X;
 			_mousePos.Y = _mouseState.Position.Y;
 			Matrix matrix = Matrix.Identity;
-			Draw(App.stage, matrix);
+			Draw(App.stage, matrix, true);
 			UpdateMouseTargetState();
 		}
 		
 		// --------------------------------------------------------------
-		private void Draw(DisplayObject displayObject, Matrix parentMatrix)
+		private void Draw(DisplayObject displayObject, Matrix parentMatrix, bool mouseEnabled)
 		{
 			if(!displayObject.visible) return;
 			
@@ -94,7 +94,6 @@ namespace PonchoMonogame
 			
 			_renderW = 0;
 			_renderH = 0;
-			bool clickThrough = false;
 
 			Sprite sprite = displayObject as Sprite;
 			DisplayObjectContainer parent = displayObject as DisplayObjectContainer;
@@ -103,12 +102,12 @@ namespace PonchoMonogame
 			{
 				RenderText(displayObject as TextField, matrix);
 			}
-			else if (sprite != null && RenderSpriteImage(sprite, matrix))
+			else if (sprite != null)
 			{
-				clickThrough = sprite.clickThrough;
+				RenderSpriteImage(sprite, matrix);
 			}
 
-			if (_renderW != 0 && _renderH != 0 && !clickThrough)
+			if (_renderW != 0 && _renderH != 0 && mouseEnabled && displayObject.mouseEnabled)
 			{
 				// Use the mouse state to detect if this sprite is the current object the mouse is over or clicked on.
 				
@@ -153,7 +152,7 @@ namespace PonchoMonogame
 				int n = parent.numChildren;
 				for ( int i = 0; i < n; ++i )
 				{
-					Draw(parent.GetChildAt(i), matrix);
+					Draw(parent.GetChildAt(i), matrix, mouseEnabled && parent.mouseChildren);
 				}
 			}
 		}
