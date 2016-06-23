@@ -1,9 +1,7 @@
 using Microsoft.Xna.Framework.Audio;
 using Microsoft.Xna.Framework.Content;
-using Poncho;
 using Poncho.Interfaces;
 using System.Collections.Generic;
-using System.Linq;
 using Poncho.Audio;
 
 namespace PonchoMonogame
@@ -59,6 +57,7 @@ namespace PonchoMonogame
 				{
 					globalVolume *= _volumeSettings[i].level;
 				}
+				
 				sound.Volume = settings.volume*globalVolume;
 				sound.Pan = settings.pan;
 				sound.Pitch = settings.pitch;
@@ -222,9 +221,7 @@ namespace PonchoMonogame
 			if(_activeAudio[0].sound == null) {
 				return PlayMusic(name);
 			}
-
-			StopSoundAt(1);
-				
+			
 			AudioInstance a = _activeAudio[0];
 			AudioInstance b = _activeAudio[1];
 
@@ -236,11 +233,11 @@ namespace PonchoMonogame
 				a.settings.fadeTo(0, durationMs);
 				a.sound.IsLooped = false;
 			}
-
+			
 			_activeAudio[0] = b;
 			_activeAudio[1] = a;
-
-			return PlayAudio(name, AudioType.MUSIC_IN).fadeFrom(0, durationMs);
+			
+			return PlayAudio(name, AudioType.MUSIC_IN)?.fadeFrom(0, durationMs);
 		}
 
 		// --------------------------------------------------------------
@@ -274,9 +271,7 @@ namespace PonchoMonogame
 		// --------------------------------------------------------------
 		private SoundEffect GetAudio(string name)
 		{
-			SoundEffect audio = null;
-			_audio.TryGetValue(name, out audio);
-			return audio;
+			return GetAudio(name, name);
 		}
 
 		// --------------------------------------------------------------
@@ -312,7 +307,6 @@ namespace PonchoMonogame
 					{
 						index = i;
 					}
-					else if ( _activeAudio[i].name == name && _activeAudio[i].settings.timeUntilRepeatMs >= App.time)
 					{
 						return null;
 					}
@@ -320,7 +314,9 @@ namespace PonchoMonogame
 			}
 
 			SoundEffect audio = GetAudio(name);
-			if( audio == null || index < 0 || index >= _activeAudio.Length ) return null;
+			if( audio == null || index < 0 || index >= _activeAudio.Length ) {
+				return null;
+			}
 			SoundEffectInstance instance = audio.CreateInstance();
 			instance.IsLooped = type == AudioType.MUSIC_IN;
 			StopSoundAt(index);
