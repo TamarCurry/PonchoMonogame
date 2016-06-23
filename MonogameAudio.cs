@@ -23,9 +23,10 @@ namespace PonchoMonogame
 			STOP,
 			RESUME
 		}
-
+		
 		private class AudioInstance
 		{
+			public bool playAudio;
 			public bool stopIfMuted;
 			public float startVolume;
 			public float targetVolume;
@@ -53,9 +54,19 @@ namespace PonchoMonogame
 			{
 				if(sound == null) return;
 				settings.Update();
-				sound.Volume = settings.volume*_volumeSettings.Sum(s => s.level);
+				float globalVolume = 1;
+				for(int i = 0; i < _volumeSettings.Length; ++i)
+				{
+					globalVolume *= _volumeSettings[i].level;
+				}
+				sound.Volume = settings.volume*globalVolume;
 				sound.Pan = settings.pan;
 				sound.Pitch = settings.pitch;
+				if(playAudio)
+				{
+					sound.Play();
+					playAudio = false;
+				}
 
 				if (stopIfMuted && sound.Volume < 0.01)
 				{
@@ -317,6 +328,7 @@ namespace PonchoMonogame
 			_activeAudio[index].settings.id = name;
 			_activeAudio[index].name = name;
 			_activeAudio[index].sound = instance;
+			_activeAudio[index].playAudio = true;
 			return _activeAudio[index].settings;
 		}
 		
