@@ -22,8 +22,9 @@ namespace PonchoMonogame
 
 		private struct MouseButtonState
 		{
-			public Sprite downTarget;
-			public Sprite upTarget;
+			public DisplayObject downTarget;
+			public DisplayObject upTarget;
+
 			public MouseButton button {get; private set; }
 			public string downEventType { get; private set; }
 			public string upEventType { get; private set; }
@@ -40,8 +41,6 @@ namespace PonchoMonogame
 			}
 		}
 		
-		private Sprite _mouseTarget;
-		private Sprite _prevMouseTarget;
 		private Vector2 _pivot;
 		private Vector2 _mousePos;
 		private Vector2[] _verts;
@@ -50,6 +49,8 @@ namespace PonchoMonogame
 		private MouseState _prevMouseState;
 		private SpriteBatch _spriteBatch;
 		private MonogameFonts _fonts;
+		private DisplayObject _mouseTarget;
+		private DisplayObject _prevMouseTarget;
 		private MonogameImages _images;
 		private MouseButtonState[] _mouseButtonStates;
 		
@@ -77,50 +78,49 @@ namespace PonchoMonogame
 			_mouseState = Mouse.GetState();
 			_mousePos.X = _mouseState.Position.X;
 			_mousePos.Y = _mouseState.Position.Y;
-			
-			int n = App.stage.numChildren;
 			Matrix matrix = Matrix.Identity;
-			for ( int i = 0; i < n; ++i )
-			{
-				DrawSprite(App.stage.GetChildAt(i), matrix);
-			}
-			
+			Draw(App.stage, matrix);
 			UpdateMouseTargetState();
 		}
 		
 		// --------------------------------------------------------------
-		private void DrawSprite(Sprite sprite, Matrix parentMatrix)
+		private void Draw(DisplayObject displayObject, Matrix parentMatrix)
 		{
-			if(!sprite.visible) return;
+			if(!displayObject.visible) return;
 			
-			Matrix matrix =  Matrix.CreateScale(sprite.scaleX, sprite.scaleY, 1) * Matrix.CreateRotationZ(MathHelper.ToRadians(sprite.rotation)) * Matrix.CreateTranslation(sprite.x, sprite.y, 0) * parentMatrix;
+			Matrix matrix =  Matrix.CreateScale(displayObject.scaleX, displayObject.scaleY, 1) * Matrix.CreateRotationZ(MathHelper.ToRadians(displayObject.rotation)) * Matrix.CreateTranslation(displayObject.x, displayObject.y, 0) * parentMatrix;
 
 			int w = 0;
 			int h = 0;
+			bool clickThrough = false;
 
-			if (sprite is TextField)
+			Sprite sprite = displayObject as Sprite;
+			DisplayObjectContainer parent = displayObject as DisplayObjectContainer;
+
+			if (displayObject is TextField)
 			{
-				RenderText(sprite as TextField, matrix);
+				RenderText(displayObject as TextField, matrix);
 			}
-			else if (RenderSpriteImage(sprite, matrix))
+			else if (sprite != null && RenderSpriteImage(sprite, matrix))
 			{
 				w = sprite.imageWidth;
 				h = sprite.imageHeight;
+				clickThrough = sprite.clickThrough;
 			}
 
-			if (w != 0 && h != 0 && !sprite.clickThrough)
+			if (w != 0 && h != 0 && !clickThrough)
 			{
 				// Use the mouse state to detect if this sprite is the current object the mouse is over or clicked on.
 				
 				// Grab the vertices for each corner of the sprite
 				_verts[0].X = -_pivot.X;
 				_verts[0].Y = -_pivot.Y;
-				_verts[1].X = sprite.imageWidth - _pivot.X;
+				_verts[1].X = w - _pivot.X;
 				_verts[1].Y = -_pivot.Y;
 				_verts[2].X = -_pivot.X;
-				_verts[2].Y = sprite.imageHeight - _pivot.Y;
-				_verts[3].X = sprite.imageWidth - _pivot.X;
-				_verts[3].Y = sprite.imageHeight - _pivot.Y;
+				_verts[2].Y = h - _pivot.Y;
+				_verts[3].X = w - _pivot.X;
+				_verts[3].Y = h - _pivot.Y;
 
 				// transform the vertices
 				for( int i = 0; i < 4; ++i )
@@ -143,15 +143,18 @@ namespace PonchoMonogame
 				if(PointInTri(_mousePos, _verts[0], _verts[1], _verts[2]) || PointInTri(_mousePos, _verts[2], _verts[1], _verts[3]))
 				{
 					// if so, this is the active mouse target
-					_mouseTarget = sprite;
+					_mouseTarget = displayObject;
 				}
 			}
 			
 			// now, render all the children
-			int n = sprite.numChildren;
-			for ( int i = 0; i < n; ++i )
+			if(parent != null)
 			{
-				DrawSprite(sprite.GetChildAt(i), matrix);
+				int n = parent.numChildren;
+				for ( int i = 0; i < n; ++i )
+				{
+					Draw(parent.GetChildAt(i), matrix);
+				}
 			}
 		}
 		
@@ -164,8 +167,8 @@ namespace PonchoMonogame
 				if (texture != null) // we have a texture, so render it onto the screen
 				{
 					// set the pivot
-					_pivot.X = sprite.pivotX*sprite.image.rect.width;
-					_pivot.Y = sprite.pivotY*sprite.image.rect.height;
+					_pivot.X = sprite.pivotX;
+					_pivot.Y = sprite.pivotY;
 
 					// grab the source rect from the texture
 					_sourceRect.X = sprite.image.rect.x;
