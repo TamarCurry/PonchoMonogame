@@ -230,14 +230,14 @@ namespace PonchoMonogame
 
 			if(a.sound != null)
 			{
-				a.settings.fadeTo(0, durationMs);
+				a.settings.FadeTo(0, durationMs);
 				a.sound.IsLooped = false;
 			}
 			
 			_activeAudio[0] = b;
 			_activeAudio[1] = a;
 			
-			return PlayAudio(name, AudioType.MUSIC_IN)?.fadeFrom(0, durationMs);
+			return PlayAudio(name, AudioType.MUSIC_IN)?.FadeFrom(0, durationMs);
 		}
 
 		// --------------------------------------------------------------
