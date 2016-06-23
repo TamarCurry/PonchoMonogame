@@ -50,18 +50,14 @@ namespace PonchoMonogame
 		private MouseState _mouseState;
 		private MouseState _prevMouseState;
 		private SpriteBatch _spriteBatch;
-		private MonogameFonts _fonts;
 		private DisplayObject _mouseTarget;
 		private DisplayObject _prevMouseTarget;
-		private MonogameImages _images;
 		private MouseButtonState[] _mouseButtonStates;
 		
 		// --------------------------------------------------------------
-		public MonogameView(SpriteBatch spriteBatch, MonogameImages images, MonogameFonts fonts)
+		public MonogameView(SpriteBatch spriteBatch)
 		{
 			_spriteBatch = spriteBatch;
-			_images = images;
-			_fonts = fonts;
 			_verts = new Vector2[4];
 
 			_mouseButtonStates = new[]{
@@ -188,9 +184,9 @@ namespace PonchoMonogame
 		// --------------------------------------------------------------
 		private bool RenderText(TextField textField, Matrix matrix)
 		{
-			if (!string.IsNullOrWhiteSpace(textField.text) && textField.format != null)
+			if (!string.IsNullOrWhiteSpace(textField.text))
 			{
-				SpriteFont font = _fonts.GetFont(textField.format.font);
+				SpriteFont font = (textField.format as MonogameTextFormat)?.spriteFont;
 				if (font != null)
 				{
 					string text = textField.text;

@@ -120,7 +120,7 @@ namespace PonchoMonogame
 			name = name ?? path;
 			SpriteFont font = _fonts.GetFont(path, name);
 			if (font == null) return null;
-			return new TextFormat(name, size);
+			return new MonogameTextFormat(name, size, font);
 		}
 		
 		// --------------------------------------------------------------
@@ -147,7 +147,7 @@ namespace PonchoMonogame
 		{
 			// Create a new SpriteBatch, which can be used to draw textures.
 			spriteBatch = new SpriteBatch(GraphicsDevice);
-			_view = new MonogameView(spriteBatch, _images, _fonts);
+			_view = new MonogameView(spriteBatch);
 			// TODO: use this.Content to load your game content here
 		}
 		
