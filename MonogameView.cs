@@ -47,11 +47,14 @@ namespace PonchoMonogame
 		private Vector2 _mousePos;
 		private Vector2[] _verts;
 		private Rectangle _sourceRect;
+		private Texture2D _stencilMask;
 		private MouseState _mouseState;
 		private MouseState _prevMouseState;
 		private SpriteBatch _spriteBatch;
 		private DisplayObject _mouseTarget;
 		private DisplayObject _prevMouseTarget;
+		private DepthStencilState _maskerStencil;
+		private DepthStencilState _maskedObjectStencil;
 		private MouseButtonState[] _mouseButtonStates;
 		
 		// --------------------------------------------------------------
@@ -59,6 +62,35 @@ namespace PonchoMonogame
 		{
 			_spriteBatch = spriteBatch;
 			_verts = new Vector2[4];
+			_stencilMask = new Texture2D(spriteBatch.GraphicsDevice, 16, 16);
+
+			Color c = new Color(0,0,0,0);
+			Color[] data = new Color[_stencilMask.Width * _stencilMask.Height];
+
+			for (int i = 0; i < data.Length; ++i)
+			{
+				data[i] = c;
+			}
+
+			_stencilMask.SetData(data);
+
+			_maskerStencil = new DepthStencilState()
+			{
+				StencilEnable = true,
+				StencilFunction = CompareFunction.Always,
+				StencilPass = StencilOperation.Replace,
+				ReferenceStencil = 1,
+				DepthBufferEnable = false
+			};
+
+			_maskedObjectStencil = new DepthStencilState()
+			{
+				StencilEnable = true,
+				StencilFunction = CompareFunction.LessEqual,
+				StencilPass = StencilOperation.Replace,
+				ReferenceStencil = 1,
+				DepthBufferEnable = false
+			};
 
 			_mouseButtonStates = new[]{
 				new MouseButtonState(MouseButton.LEFT, MouseEvent.MOUSE_DOWN, MouseEvent.MOUSE_UP, MouseEvent.CLICK),
@@ -187,6 +219,7 @@ namespace PonchoMonogame
 			if (!string.IsNullOrWhiteSpace(textField.text))
 			{
 				SpriteFont font = (textField.format as MonogameTextFormat)?.spriteFont;
+				
 				if (font != null)
 				{
 					string text = textField.text;
@@ -205,6 +238,7 @@ namespace PonchoMonogame
 						_renderH = textField.height;
 						_sourceRect.Width = textField.width;
 						_sourceRect.Height = textField.height;
+						_spriteBatch.GraphicsDevice.ScissorRectangle = _sourceRect;
 						if (textField.wordWrap && _renderW > 0 && _renderH > 0)
 						{
 							WrapText(font, text, _renderW);
@@ -219,8 +253,16 @@ namespace PonchoMonogame
 
 					_pivot.X = textField.pivotX*_renderW;
 					_pivot.Y = textField.pivotY*_renderH;
+					
+					if (textField.clipOverflow)
+					{
+						Vector2 scale = new Vector2( _renderW * 1f/_stencilMask.Width, _renderH * 1f/_stencilMask.Height);
+						_spriteBatch.Begin(SpriteSortMode.Deferred, null, null, _maskerStencil, null, null, matrix);
+						_spriteBatch.Draw(_stencilMask, Vector2.Zero, _stencilMask.Bounds, Color.White, 0, _pivot, scale, SpriteEffects.None, 0);
+						_spriteBatch.End();
+					}
 
-					_spriteBatch.Begin(SpriteSortMode.Deferred, null, null, null, RasterizerState.CullNone, null, matrix);
+					_spriteBatch.Begin(SpriteSortMode.Deferred, null, null, textField.clipOverflow ? _maskedObjectStencil : null, null, null, matrix);
 					_spriteBatch.DrawString(font, textField.text, Vector2.Zero, Color.Black, 0, _pivot, Vector2.One, SpriteEffects.None, 0);
 					_spriteBatch.End();
 					

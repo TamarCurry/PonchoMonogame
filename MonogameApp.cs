@@ -14,6 +14,8 @@ namespace PonchoMonogame
 	/// </summary>
 	public class MonogameApp : Game, IGameApp
 	{
+		private static MonogameApp _instance;
+
 		private int _elapsed;
 		private int _frames;
 		private int _fpsInterval;
@@ -37,6 +39,9 @@ namespace PonchoMonogame
 		public Stage stage { get { return Stage.instance; } }
 		public IAppAudio audio { get { return _audio; } }
 		public IAppImages images { get { return _images; } }
+
+		internal static MonogameFonts fonts { get { return _instance._fonts; } }
+
 		#endregion
 
 		#region METHODS
@@ -48,6 +53,7 @@ namespace PonchoMonogame
 		/// <param name="onInit">Callback for when the app is ready.</param>
 		public MonogameApp(Action onInit)
 		{
+			_instance = this;
 			graphics = new GraphicsDeviceManager(this);
 			graphics.PreferredBackBufferWidth = 1080;
 			graphics.PreferredBackBufferHeight = 720;
