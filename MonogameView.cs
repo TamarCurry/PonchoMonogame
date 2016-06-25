@@ -7,6 +7,7 @@ using Microsoft.Xna.Framework.Input;
 using Poncho;
 using Poncho.Display;
 using Poncho.Events;
+using Poncho.Geom;
 using Poncho.Text;
 
 namespace PonchoMonogame
@@ -109,17 +110,25 @@ namespace PonchoMonogame
 			_mousePos.X = _mouseState.Position.X;
 			_mousePos.Y = _mouseState.Position.Y;
 			Matrix matrix = Matrix.Identity;
-			Draw(App.stage, matrix, true);
+			Draw(App.stage, matrix, Color.White, true);
 			UpdateMouseTargetState();
 		}
 		
 		// --------------------------------------------------------------
-		private void Draw(DisplayObject displayObject, Matrix parentMatrix, bool mouseEnabled)
+		private void Draw(DisplayObject displayObject, Matrix parentMatrix, Color parentColor, bool mouseEnabled)
 		{
 			if(!displayObject.visible) return;
 			
 			Matrix matrix =  Matrix.CreateScale(displayObject.scaleX, displayObject.scaleY, 1) * Matrix.CreateRotationZ(MathHelper.ToRadians(displayObject.rotation)) * Matrix.CreateTranslation(displayObject.x, displayObject.y, 0) * parentMatrix;
-			
+			ColorTransform ct = displayObject.transforms.colorTransform;
+
+			Color color = new Color(
+				parentColor.R/255f*ct.red,
+				parentColor.G/255f*ct.green,
+				parentColor.B/255f*ct.blue,
+				parentColor.A/255f*ct.alpha
+			);
+
 			_renderW = 0;
 			_renderH = 0;
 
@@ -128,11 +137,11 @@ namespace PonchoMonogame
 
 			if (displayObject is TextField)
 			{
-				RenderText(displayObject as TextField, matrix);
+				RenderText(displayObject as TextField, matrix, color);
 			}
 			else if (sprite != null)
 			{
-				RenderSpriteImage(sprite, matrix);
+				RenderSpriteImage(sprite, matrix, color);
 			}
 
 			if (_renderW != 0 && _renderH != 0 && mouseEnabled && displayObject.mouseEnabled)
@@ -180,13 +189,13 @@ namespace PonchoMonogame
 				int n = parent.numChildren;
 				for ( int i = 0; i < n; ++i )
 				{
-					Draw(parent.GetChildAt(i), matrix, mouseEnabled && parent.mouseChildren);
+					Draw(parent.GetChildAt(i), matrix, color, mouseEnabled && parent.mouseChildren);
 				}
 			}
 		}
 		
 		// --------------------------------------------------------------
-		private bool RenderSpriteImage(Sprite sprite, Matrix matrix)
+		private bool RenderSpriteImage(Sprite sprite, Matrix matrix, Color color)
 		{
 			Texture2D texture = (sprite.image as MonogameImage)?.texture;
 
@@ -203,8 +212,8 @@ namespace PonchoMonogame
 			_sourceRect.Height = sprite.imageHeight;
 
 			// setup the render with the appropriate matrix and draw it
-			_spriteBatch.Begin(SpriteSortMode.Deferred, null, null, null, RasterizerState.CullNone, null, matrix);
-			_spriteBatch.Draw(texture, Vector2.Zero, _sourceRect, Color.White, 0, _pivot, 1, SpriteEffects.None, 0);
+			_spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.NonPremultiplied, null, null, RasterizerState.CullNone, null, matrix);
+			_spriteBatch.Draw(texture, Vector2.Zero, _sourceRect, color, 0, _pivot, 1, SpriteEffects.None, 0);
 			_spriteBatch.End();
 
 			_renderW = sprite.imageWidth;
@@ -214,7 +223,7 @@ namespace PonchoMonogame
 		}
 		
 		// --------------------------------------------------------------
-		private bool RenderText(TextField textField, Matrix matrix)
+		private bool RenderText(TextField textField, Matrix matrix, Color color)
 		{
 			if (!string.IsNullOrWhiteSpace(textField.text))
 			{
@@ -227,43 +236,38 @@ namespace PonchoMonogame
 					if (!textField.multiline)
 					{
 						Regex reg = new Regex("\n|\r", RegexOptions.IgnoreCase);
-						text = reg.Replace(text, " ");
+						text = reg.Replace(text, "");
+					}
+					else if (textField.wordWrap && textField.width > 0)
+					{
+						text = WrapText(font, text, textField.width);
 					}
 					
 					if (textField.clipOverflow)
 					{
-						_sourceRect.X = 0;
-						_sourceRect.Y = 0;
 						_renderW = textField.width;
 						_renderH = textField.height;
-						_sourceRect.Width = textField.width;
-						_sourceRect.Height = textField.height;
-						_spriteBatch.GraphicsDevice.ScissorRectangle = _sourceRect;
-						if (textField.wordWrap && _renderW > 0 && _renderH > 0)
-						{
-							WrapText(font, text, _renderW);
-						}
-					}
-					else
-					{
-						Vector2 v = font.MeasureString(text);
-						_renderW = (ushort) v.X;
-						_renderH = (ushort) v.Y;
-					}
-
-					_pivot.X = textField.pivotX*_renderW;
-					_pivot.Y = textField.pivotY*_renderH;
-					
-					if (textField.clipOverflow)
-					{
 						Vector2 scale = new Vector2( _renderW * 1f/_stencilMask.Width, _renderH * 1f/_stencilMask.Height);
 						_spriteBatch.Begin(SpriteSortMode.Deferred, null, null, _maskerStencil, null, null, matrix);
 						_spriteBatch.Draw(_stencilMask, Vector2.Zero, _stencilMask.Bounds, Color.White, 0, _pivot, scale, SpriteEffects.None, 0);
 						_spriteBatch.End();
 					}
+					else
+					{
+						Vector2 textSize = font.MeasureString(text);
+						_renderW = (ushort) textSize.X;
+						_renderH = (ushort) textSize.Y;
+					}
+					
+					_pivot.X = textField.pivotX*_renderW;
+					_pivot.Y = textField.pivotY*_renderH;
 
-					_spriteBatch.Begin(SpriteSortMode.Deferred, null, null, textField.clipOverflow ? _maskedObjectStencil : null, null, null, matrix);
-					_spriteBatch.DrawString(font, textField.text, Vector2.Zero, Color.Black, 0, _pivot, Vector2.One, SpriteEffects.None, 0);
+					color.R = (byte)(color.R*((textField.format.color >> 16) & 0xff)/255);
+					color.G = (byte)(color.G*((textField.format.color >> 8) & 0xff)/255);
+					color.B = (byte)(color.B*(textField.format.color & 0xff)/255);
+
+					_spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.NonPremultiplied, null, textField.clipOverflow ? _maskedObjectStencil : null, null, null, matrix);
+					_spriteBatch.DrawString(font, text, Vector2.Zero, color, 0, _pivot, Vector2.One, SpriteEffects.None, 0);
 					_spriteBatch.End();
 					
 					return true;
